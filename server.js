@@ -37,15 +37,6 @@ app.post('/githubwebhook', (req, res) => {
   res.status(200).json({ message: 'Webhook received' });
 })
 
-app.post('/hi', (req, res) => {
-  console.log('req is comming');
-  const { name, pass } = req.body
-  console.log(req.body);
-  res.status(200).json({ message: 'Hello from the other side', data: { name, pass } })
-})
-app.get('/fancy', (req, res) => {
-  res.status(200).json({ message: 'This is a fancy route' })
-})
 // api route
 app.get("/api", (req, res) => {
   res.json({
