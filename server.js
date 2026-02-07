@@ -1,55 +1,141 @@
 import express from "express";
-import { spawn } from 'child_process'
+import { spawn } from "child_process";
+import crypto from "crypto";
 
 const app = express();
 const PORT = 5000;
 
-// middleware
+/* ================================
+   🔐 VERIFY GITHUB SIGNATURE
+================================ */
+function verifyGitHub(req) {
+  const signature = req.headers["x-hub-signature-256"];
+  const secret = "cicdsec@123"; // MUST match GitHub webhook secret
+
+  if (!signature) return false;
+
+  const hash =
+    "sha256=" +
+    crypto.createHmac("sha256", secret).update(req.body).digest("hex");
+
+  const sigBuffer = Buffer.from(signature);
+  const hashBuffer = Buffer.from(hash);
+
+  if (sigBuffer.length !== hashBuffer.length) return false;
+
+  return crypto.timingSafeEqual(sigBuffer, hashBuffer);
+}
+
+/* ================================
+   ⚠️ IMPORTANT MIDDLEWARE ORDER
+   raw body FIRST for webhook
+================================ */
+app.use("/githubwebhook", express.raw({ type: "*/*" }));
+
+// normal json middleware for other routes
 app.use(express.json());
 
-// home route
+/* ================================
+   HOME ROUTE
+================================ */
 app.get("/", (req, res) => {
-  res.send("🚀 Server running with ES6 Express");
+  res.send("🚀 CI/CD Server running");
 });
 
-app.post('/githubwebhook', (req, res) => {
-  console.log(req.headers);
-  console.log(req.body);
+/* ================================
+   🔥 GITHUB WEBHOOK ROUTE
+================================ */
+app.post("/githubwebhook", (req, res) => {
+  console.log("📩 Webhook received");
 
-  const bashChildProcess = spawn('bash', ['../deploy.sh'])
-  bashChildProcess.stdout.on('data', (data) => {
-    process.stdout.write(data)
-  })
-  // console.log(bashChildProcess.stderr);
+  // verify request came from github
+  if (!verifyGitHub(req)) {
+    console.log("❌ Unauthorized webhook attempt blocked");
+    return res.status(401).send("Not allowed");
+  }
 
-  bashChildProcess.on('close', (code) => {
-    if (code == 0) {
-      console.log('Script executed successfully');
+  console.log("✅ GitHub webhook verified");
+  console.log("🚀 Starting deployment...");
+
+  // run deploy script
+  const bashChildProcess = spawn("bash", ['deploy-ci.sh'], {
+    cwd: '../',
+    env: {
+      ...process.env,
+      CI_MODE: 'true'  // Add this flag
+    }
+  });
+
+  // show logs in terminal
+  bashChildProcess.stdout.on("data", (data) => {
+    console.log(`📦 ${data}`);
+  });
+
+  bashChildProcess.stderr.on("data", (data) => {
+    console.error(`❌ ERROR: ${data}`);
+  });
+
+  bashChildProcess.on("close", (code) => {
+    if (code === 0) {
+      console.log("✅ Deployment completed successfully");
     } else {
-      console.log('Script execution failed with code: ' + code);
+      console.log("❌ Deployment failed with code:", code);
     }
-    console.log(code);
-  })
+  });
 
-  bashChildProcess.on('error', (err) => {
-    console.error('Failed to start subprocess.', err);
-  })
-  res.status(200).json({ message: 'Webhook received' });
-})
+  bashChildProcess.on("error", (err) => {
+    console.error("❌ Failed to start deploy script:", err);
+  });
 
-// api route
-app.get("/api", (req, res) => {
-  res.json({
-    message: "Hello from ES6 backend 🔥",
-    response: {
-      name: "John Doe",
-      age: 30,
-      email: `jhoan@gmail.com`
-    }
+  res.status(200).json({
+    success: true,
+    message: "🚀 Deployment started"
   });
 });
 
-// start server
+/* ================================
+   🔥 IMPRESSIVE DEVOPS STATUS API
+================================ */
+app.get("/api", (req, res) => {
+  console.log("📡 CI/CD status endpoint hit");
+
+  res.status(200).json({
+    success: true,
+    message: "CI/CD Running 🚀",
+    time: new Date().toISOString(),
+
+    server: {
+      env: "production",
+      uptime: process.uptime(),
+      node: process.version
+    },
+
+    deployment: {
+      project: "MERN App",
+      branch: "main",
+      status: "running"
+    },
+
+    pipeline: [
+      "Push detected",
+      "Webhook triggered",
+      "Pulling code",
+      "Building...",
+      "Restarting..."
+    ],
+
+    infra: {
+      server: "VPS",
+      nginx: "on",
+      ssl: "enabled 🔐"
+    }
+  });
+
+});
+
+/* ================================
+   START SERVER
+================================ */
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
