@@ -1,10 +1,13 @@
 import express from "express";
 import { spawn } from "child_process";
+import cors from "cors";   // 👈 add
 import crypto from "crypto";
 
 const app = express();
 const PORT = 5000;
 
+// enable cors for all origins
+app.use(cors());
 /* ================================
    🔐 VERIFY GITHUB SIGNATURE
 ================================ */
